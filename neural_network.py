@@ -4,43 +4,67 @@ from nn_utils import *
 
 from testCases_v4 import *
 from dnn_app_utils_v3 import *
-
-np.random.seed(1)
+from testCases_reg import *
+from opt_utils import *
 
 class Neural_network():
     """Neural network class"""
-    def __init__(self, layer_dims=[], learning_rate=1e-4, no_epoches = 1000):
+    def __init__(self, layer_dims=[], L=0, params={}, cache_list=tuple(), grads={}, \
+                 learning_rate=1e-4, no_epoches = 1000, X=[], Y=[], weight_decay=5e-4, \
+                 loss_function_name='binary_cross_entropy', batch_size=64):
         """
         Initial attribute for class
         
         Args:
             layer_dims: list of number of units in each layer.
-        Returns:
-            self.__layer_dims
-            self.__L: number of layers (include input layer)
-            self.__params: dictionary of parameters in network. For example: layer l has
+            L: number of layers (include input layer). (Defaults: 0)
+            params: dictionary of parameters in network. For example: layer l has
                 self.__params['W'+str(l)] = ...
                 self.__params['b'+str(l)] = ...
-            self.__cache_list: stores all the single_layer_cache (linear_cache and activation_cache) of each single_layer_forward. 
-                            (There are L - 1 single_layer_cache)
-            self.__grads: dictionay of gradients stored when backproping. For example: layer l has
+                (Defaults: {})
+            cache_list: stores all the single_layer_cache (linear_cache and activation_cache) of each single_layer_forward. 
+                            (There are L - 1 single_layer_cache) (Defaults: ())
+            grads: dictionay of gradients stored when backproping. For example: layer l has
                 self.__grads['dA'+str(l)] = ...
                 self.__grads['dW'+str(l)] = ...
                 self.__grads['db'+str(l)] = ...
                 self.__grads['dZ'+str(l)] = ...
-            self.__cost: cost (singular value)
-            self.__learning_rate: learning rate (Defaults: 1e-4)
-            self.__no_epoches: number of epoches (Defaults: 1000)
+            learning_rate: learning rate (Defaults: 1e-4)
+            no_epoches: number of epoches (Defaults: 1000)
+            X: input data of shape (input size, m) - numpy array.
+            Y: the groundtruth categorial labels of shape (#classes, m).
+            weight_decay: the regularizer hyperparameter (default: 5e-4)
+            loss_function_name: loss function to use (e.g. binary_cross_entropy or softmax_cross_entropy)
+            batch_size: batch size (Defaults: 64)
 
+        Class Attributes:
+            self.__layer_dims
+            self.__L
+            self.__params
+            self.__cache_list
+            self.__grads
+            self.__cost: cost (singular value)
+            self.__learning_rate
+            self.__no_epoches
+            self.__X
+            self.__Y
+            self.__weight_decay
+            self.__loss_function_name
+            self.batch_size
         """
         self.__layer_dims = layer_dims
-        self.__L = len(layer_dims)
-        self.__params = {}
-        self.__cache_list = []
-        self.__grads = {}
+        self.__L = max(len(layer_dims), L, (len(params)//2) + 1, len(cache_list)+1)
+        self.__params = params
+        self.__cache_list = cache_list
+        self.__grads = grads
         self.__cost = 0.0
         self.__learning_rate = learning_rate
         self.__no_epoches = no_epoches
+        self.__X = X
+        self.__Y = Y
+        self.__weight_decay = weight_decay # used in cost_function, single_layer_backward, linear_backward
+        self.__loss_function_name = loss_function_name
+        self.__batch_size = batch_size
 
     @property
     def layer_dims(self):
@@ -105,6 +129,51 @@ class Neural_network():
         """Setter function using property decorator"""
         self.__no_epoches = src
 
+    @property
+    def X(self):
+        """Getter function using property decorator"""
+        return self.__X
+    @X.setter
+    def X(self, src):
+        """Setter function using property decorator"""
+        self.__X = src
+
+    @property
+    def Y(self):
+        """Getter function using property decorator"""
+        return self.__Y
+    @Y.setter
+    def Y(self, src):
+        """Setter function using property decorator"""
+        self.__Y = src
+
+    @property
+    def weight_decay(self):
+        """Getter function using property decorator"""
+        return self.__weight_decay
+    @weight_decay.setter
+    def weight_decay(self, src):
+        """Setter function using property decorator"""
+        self.__weight_decay = src
+    
+    @property
+    def loss_function_name(self):
+        """Getter function using property decorator"""
+        return self.__loss_function_name
+    @loss_function_name.setter
+    def loss_function_name(self, src):
+        """Setter function using property decorator"""
+        self.__loss_function_name = src
+
+    @property
+    def batch_size(self):
+        """Getter function using property decorator"""
+        return self.__batch_size
+    @batch_size.setter
+    def batch_size(self, src):
+        """Setter function using property decorator"""
+        self.__batch_size = src
+
     def initialize_params(self):
         """
         Initialize parameters for neural network using He initalization method (He et al)
@@ -119,9 +188,9 @@ class Neural_network():
                 WL (layer_dims[L], layer_dims[L-1]): weight matrix of layer L
                 bL (layer_dims[L], 1): bias vector of layer L
         """
-        np.random.seed(1)
+        np.random.seed(3)
         for l in range(1, self.__L):
-            self.__params['W'+str(l)] = np.random.randn(self.__layer_dims[l],self.__layer_dims[l-1]) * 0.01#* np.sqrt(2/self.__layer_dims[l-1])
+            self.__params['W'+str(l)] = np.random.randn(self.__layer_dims[l],self.__layer_dims[l-1]) * np.sqrt(2/self.__layer_dims[l - 1]) #/np.sqrt(self.__layer_dims[l-1]) 
             self.__params['b'+str(l)] = np.zeros((self.__layer_dims[l], 1))
             # Assert the shape
             assert(self.__params['W' + str(l)].shape == (self.__layer_dims[l], self.__layer_dims[l-1]))
@@ -144,24 +213,27 @@ class Neural_network():
             X: data of shape (input size, m) - numpy array.
         Returns:
             AL: the output of activation function at the L-th layer. Shape (#classes, m)
-            self.__cache_list: stores all the single_layer_cache (linear_cache and activation_cache) of each single_layer_forward. 
+            cache_list: stores all the single_layer_cache (linear_cache and activation_cache) of each single_layer_forward. 
                             (There are L - 1 single_layer_cache)
         """
+        
         # Firstly, assign A = X
         A = X
         L = self.__L - 1 # exclude input layer
+        
+        cache_list = []
 
         # [Linear -> RELU]: From layer 1 to L - 1
         for l in range(1, L):
             A_prev = A
             A, single_layer_cache = single_layer_forward(A_prev, self.__params['W'+str(l)], self.__params['b'+str(l)], 'relu')
-            self.__cache_list.append(single_layer_cache)
+            cache_list.append(single_layer_cache)
         
         # [Linear -> Sigmoid]: at layer L
         AL, single_layer_cache = single_layer_forward(A, self.__params['W'+str(L)], self.__params['b'+str(L)], 'sigmoid')
-        self.__cache_list.append(single_layer_cache)
+        cache_list.append(single_layer_cache)
 
-        return AL, self.__cache_list
+        return AL, cache_list
 
     def cost_function(self, AL, Y):
         """
@@ -175,9 +247,16 @@ class Neural_network():
         Returns:
             cost: cost function (singular value)
         """
+        
         # Number of examples
         m = Y.shape[1]
-        cost = -np.sum(Y * np.log(AL) + (1 - Y) * np.log(1 - AL))/m
+        cost = -np.nansum(Y * np.log(AL) + (1 - Y) * np.log(1 - AL))/m
+
+        # If Using regularization
+        if self.__weight_decay != 0:
+            L = self.L
+            regularization = np.sum(np.sum(np.square(self.__params['W'+str(l)])) for l in range(1, L))
+            cost += (self.__weight_decay / (2*m)) * regularization
 
         self.__cost = np.squeeze(cost) # make sure cost is singular value
         assert(self.__cost.shape == ())
@@ -204,18 +283,19 @@ class Neural_network():
         m = Y.shape[1] # No.examples
         L = self.__L - 1 # No.layers exclude input layer
 
-        # Derivative of cost function respect to AL
-        dAL = -Y/AL + (1-Y)/(1-AL)
-        self.__grads['dA'+str(L)] = dAL # Store in self.__grads
+        # # Derivative of cost function respect to AL
+        # dAL = (-Y/AL + (1-Y)/(1-AL))
+        # self.__grads['dA'+str(L)] = dAL # Store in self.__grads
 
         # [Linear <- Sigmoid]: Backprop at last layer L
-        self.__grads['dA'+str(L-1)], self.__grads['dW'+str(L)], self.__grads['db'+str(L)], self.__grads['dZ'+str(L)] = single_layer_backward(dAL, self.__cache_list[L-1], 'sigmoid')
+        #single_layer_backward(dAL, self.__cache_list[L-1], 'sigmoid') 
+        self.__grads['dA'+str(L-1)], self.__grads['dW'+str(L)], self.__grads['db'+str(L)], self.__grads['dZ'+str(L)] = single_layer_backward_last_layer(Y, self.__cache_list[L-1], 'sigmoid', self.__weight_decay)
         
         # [Linear <- Relu] * (L-1): Backprop through L - 1 layer
         # Loop from L-1 to 1
-        for l in range(L - 1, 0, -1):
-            single_layer_cache = self.__cache_list[l - 1]
-            self.__grads['dA'+str(l-1)], self.__grads['dW'+str(l)], self.__grads['db'+str(l)], self.__grads['dZ'+str(l)] = single_layer_backward(self.__grads['dA'+str(l)], single_layer_cache, 'relu')
+        for l in reversed(range(L - 1)):
+            single_layer_cache = self.__cache_list[l]
+            self.__grads['dA'+str(l)], self.__grads['dW'+str(l+1)], self.__grads['db'+str(l+1)], self.__grads['dZ'+str(l+1)] = single_layer_backward(self.__grads['dA'+str(l+1)], single_layer_cache, 'relu', self.__weight_decay)
         
         return self.__grads
 
@@ -241,13 +321,13 @@ class Neural_network():
         """
         L = self.__L - 1 #No.layers (exclude input layer)
         # Update W, b through each layer from 1 to L
-        for l in range(1, L+1):
-            self.__params['W'+str(l)] = self.__params['W'+str(l)] - self.__learning_rate * self.__grads['dW'+str(l)]
-            self.__params['b'+str(l)] = self.__params['b'+str(l)] - self.__learning_rate * self.__grads['db'+str(l)]
+        for l in range(L):
+            self.__params['W'+str(l+1)] = self.__params['W'+str(l+1)] - self.__learning_rate * self.__grads['dW'+str(l+1)]
+            self.__params['b'+str(l+1)] = self.__params['b'+str(l+1)] - self.__learning_rate * self.__grads['db'+str(l+1)]
 
         return self.__params
 
-    def model(self, X, Y, plot_learning_curve=False):
+    def model(self, plot_learning_curve=False):
         """
         Train L layers neural network: [Linear -> Relu] * (L-1) and [Linear -> Sigmoid]
         
@@ -260,8 +340,8 @@ class Neural_network():
         3. Prediction
 
         Args:
-            X: data of shape (input size, m) - numpy array.
-            Y: the groundtruth categorial labels of shape (#classes, m).
+            self.__X: data of shape (input size, m) - numpy array.
+            self.__Y: the groundtruth categorial labels of shape (#classes, m).
             self.__no_epoches: number of epoches
             plot_learning_curve: Boolean value (Defaults: False). If True, this will plot learning curve of cost every 100 epoches
         Returns:
@@ -269,22 +349,33 @@ class Neural_network():
             
         """
         
+        X, Y = self.__X, self.__Y
+
         no_epoches = self.__no_epoches
         costs = [] # Store cost every 100 epoches for plotting
 
         # 1. Initialize parameters for training
-        self.initialize_params()
+        self.__params = self.initialize_params()
         
         # 2. Iterate over no_epoches
         for epoch in range(no_epoches):
-            # 2a. Forward propagation
-            AL, cache_list = self.multi_layer_forward(X)
-            # 2b. Compute cost function
-            cost = self.cost_function(AL, Y)
-            # 2c. Backward propagation
-            grads = self.multi_layer_backward(AL, Y)
-            # 2d. Update parameters (using parameter and gradients from backprop)
-            self.update_parameters()
+            
+            minibatches = random_minibatches(X, Y, self.__batch_size, seed=epoch)
+            # Compute the number of minibatch
+            no_minibatches = len(minibatches)
+            cost = 0.0
+
+            for minibatch in minibatches:
+                # Unpack minibatch
+                X_minibatch, Y_minibatch = minibatch
+                # 2a. Forward propagation
+                AL, self.__cache_list = self.multi_layer_forward(X_minibatch)
+                # 2b. Compute cost function
+                cost += self.cost_function(AL, Y_minibatch)/no_minibatches
+                # 2c. Backward propagation
+                self.__grads = self.multi_layer_backward(AL, Y_minibatch)
+                # 2d. Update parameters (using parameter and gradients from backprop)
+                self.__params = self.update_parameters()
 
             if epoch % 100 == 0:
                 print("Epoch %d: cost = %f"%(epoch, cost))
@@ -294,19 +385,21 @@ class Neural_network():
             plt.plot(np.squeeze(costs))
             plt.xlabel('Iteration per hundred')
             plt.ylabel('cost')
-            plt.title('Learning curve with learning rate = %f' %self.__learning_rate)
+            plt.title('Learning curve with learning rate = '+ str(self.__learning_rate))
+
+        return self.__params
             
-    def predict(self, X):
+    def predict(self):
         """
         Predict results based on input data X
 
         Args:
-            X: data of shape (input size, m) - numpy array.
+            self.__X: data of shape (input size, m) - numpy array.
         
         Returns:
             Y_hat: the predicted results in form of one-hot vector. Shape (#classes, m)
         """
-        AL, _ = self.multi_layer_forward(X)
+        AL, _ = self.multi_layer_forward(self.__X)
         
         Y_hat = np.zeros(AL.shape)
 
@@ -318,18 +411,19 @@ class Neural_network():
            
         return Y_hat
 
-    def evaluate(self, X, Y):
+    def evaluate(self):
         """
         Evaluate predicted esults based on input data X and label Y
 
         Args:
-            X: data of shape (input size, m) - numpy array.
-            Y: the groundtruth categorial labels of shape (#classes, m).
+            self.__X: data of shape (input size, m) - numpy array.
+            self.__Y: the groundtruth categorial labels of shape (#classes, m).
 
         Returns:
             accuracy: the accuracy of model on X, Y dataset. (singular value)
         """
-        Y_hat = self.predict(X)
+        Y = self.__Y
+        Y_hat = self.predict()
         accuracy = np.mean(Y_hat == Y)
         return accuracy
 
@@ -413,40 +507,87 @@ class Neural_network():
 # print ("W2 = "+ str(parameters["W2"]))
 # print ("b2 = "+ str(parameters["b2"]))
 
-train_x_orig, train_y, test_x_orig, test_y, classes = load_data()
-# Explore your dataset 
-m_train = train_x_orig.shape[0]
-num_px = train_x_orig.shape[1]
-m_test = test_x_orig.shape[0]
+"""Model test"""
+# train_x_orig, train_y, test_x_orig, test_y, classes = load_data()
+# # Explore your dataset 
+# m_train = train_x_orig.shape[0]
+# num_px = train_x_orig.shape[1]
+# m_test = test_x_orig.shape[0]
 
-print ("Number of training examples: " + str(m_train))
-print ("Number of testing examples: " + str(m_test))
-print ("Each image is of size: (" + str(num_px) + ", " + str(num_px) + ", 3)")
-print ("train_x_orig shape: " + str(train_x_orig.shape))
-print ("train_y shape: " + str(train_y.shape))
-print ("test_x_orig shape: " + str(test_x_orig.shape))
-print ("test_y shape: " + str(test_y.shape))
+# print ("Number of training examples: " + str(m_train))
+# print ("Number of testing examples: " + str(m_test))
+# print ("Each image is of size: (" + str(num_px) + ", " + str(num_px) + ", 3)")
+# print ("train_x_orig shape: " + str(train_x_orig.shape))
+# print ("train_y shape: " + str(train_y.shape))
+# print ("test_x_orig shape: " + str(test_x_orig.shape))
+# print ("test_y shape: " + str(test_y.shape))
 
-# Reshape the training and test examples 
-train_x_flatten = train_x_orig.reshape(train_x_orig.shape[0], -1).T   # The "-1" makes reshape flatten the remaining dimensions
-test_x_flatten = test_x_orig.reshape(test_x_orig.shape[0], -1).T
+# # Reshape the training and test examples 
+# train_x_flatten = train_x_orig.reshape(train_x_orig.shape[0], -1).T   # The "-1" makes reshape flatten the remaining dimensions
+# test_x_flatten = test_x_orig.reshape(test_x_orig.shape[0], -1).T
 
-# Standardize data to have feature values between 0 and 1.
-train_x = train_x_flatten/255.
-test_x = test_x_flatten/255.
+# # Standardize data to have feature values between 0 and 1.
+# train_x = train_x_flatten/255.
+# test_x = test_x_flatten/255.
 
-print ("train_x's shape: " + str(train_x.shape))
-print ("test_x's shape: " + str(test_x.shape))
+# print ("train_x's shape: " + str(train_x.shape))
+# print ("test_x's shape: " + str(test_x.shape))
 
-nn = Neural_network(layer_dims=[12288, 7, 1])
-nn.no_epoches = 2500
-nn.learning_rate = 0.0075
+# nn = Neural_network(layer_dims=[12288, 20, 7, 5, 1])
+# nn.no_epoches = 1000
+# nn.learning_rate = 0.0075
+# nn.X = train_x
+# nn.Y = train_y
 
-params = nn.model(train_x, train_y, plot_learning_curve=True)
+# params = nn.model(plot_learning_curve=True)
 
-acc_train = nn.evaluate(train_x, train_y)
-acc_test = nn.evaluate(test_x, test_y)
+# acc_train = nn.evaluate()
+
+# nn.X = test_x
+# nn.Y = test_y
+# acc_test = nn.evaluate()
+# print("Accuracy on training set:", acc_train)
+# print("Accuracy on test set:", acc_test)
+
+# plt.show()
+
+"""Cost with Ref test"""
+# A3, Y_assess, parameters = compute_cost_with_regularization_test_case()
+# nn = Neural_network(Y=Y_assess, params=parameters, weight_decay=0.1)
+# print("cost = "+str(nn.cost_function(A3)))
+
+
+"""Backprop with Reg test"""
+# X_assess, Y_assess, cache = backward_propagation_with_regularization_test_case()
+# (Z1, A1, W1, b1, Z2, A2, W2, b2, Z3, A3, W3, b3) = cache
+# single_layer_cache = (((X_assess, W1, b1), Z1), ((A1, W2, b2), Z2), ((A2, W3, b3), Z3))
+
+# nn = Neural_network()
+# nn.X = X_assess
+# nn.Y = Y_assess
+# nn.cache_list = single_layer_cache
+# nn.L = 4
+# nn.weight_decay = 0.7
+
+# grads =  nn.multi_layer_backward(A3)
+# print ("dW1 = "+ str(grads["dW1"]))
+# print ("dW2 = "+ str(grads["dW2"]))
+# print ("dW3 = "+ str(grads["dW3"]))
+
+"""Model test: Minibatch"""
+train_X, train_Y = load_dataset()
+# train 3-layer model
+layer_dims = [train_X.shape[0], 5, 2, 1]
+nn = Neural_network(layer_dims=layer_dims)
+nn.X = train_X
+nn.Y = train_Y
+nn.no_epoches = 10000
+nn.learning_rate = 0.0007
+
+parameters = nn.model(plot_learning_curve=True)
+
+# Predict
+acc_train = nn.evaluate()
 print("Accuracy on training set:", acc_train)
-print("Accuracy on test set:", acc_test)
 
 plt.show()
