@@ -1,6 +1,40 @@
 import numpy as np
+import pandas as pd
 
-from testCases_opti import *
+def load_data(train_path, test_path):
+    """
+    Load Mnist dataset which contains 70,000 grayscale images in 10 categories. 
+    The images show individual articles of clothing at low resolution (28 by 28 pixels).
+
+    Input:
+        train_path: path name of train set (includes X_train, Y_train)
+        test_path: path name of test set (includes X_test)
+    Output:
+        Tuple of (X_train, Y_train): training set
+        Tuple of (X_test): test set
+    """
+    # Import data
+    train_set = pd.read_csv(train_path)
+    test_set = pd.read_csv(test_path)
+
+    # Separate x and y in training set
+    Y_train = train_set["label"]
+    X_train = train_set.drop(labels=["label"], axis=1)
+
+    X_test = test_set
+
+    return (X_train, Y_train), X_test
+
+def convert_to_one_hot(Y, no_class):
+    """
+    Convert Y from shape (m, 1) into (m, no_class) with each column correspond to the actual digit of example
+    Args:
+        Y(m, 1): label
+        no_class: number of catergorical class
+    Returns:
+        Y_one_hot: (m, no_class)
+    """
+    return np.eye(no_class)[Y.reshape(-1)]
 
 def random_minibatches(X, Y, mini_batch_size = 64, seed = 0):
     '''
@@ -60,7 +94,7 @@ def softmax(Z):
     Refer: https://machinelearningcoban.com/2017/02/17/softmax/#-softmax-regression-cho-mnist
     
     Args:
-        Z: Output of linear function. (#numclass, Z)
+        Z: Output of linear function. (#numclass, m)
 
     Returns:
         A: Output of softmax function. Same shape as Z
@@ -229,6 +263,8 @@ def single_layer_forward(A_prev, W, b, activation_name):
         A, activation_cache = sigmoid(Z)
     elif activation_name == 'relu':
         A, activation_cache = relu(Z)
+    else:
+        A, activation_cache = softmax(Z)        
     
     cache = (linear_cache, activation_cache)
     return A, cache
@@ -330,14 +366,16 @@ def single_layer_backward_last_layer(Y, single_layer_cache, activation_name, wei
 
     return dA_prev, dW, db, dZ
 
-
-# X_assess, Y_assess, mini_batch_size = random_mini_batches_test_case()
-# mini_batches = random_minibatches(X_assess, Y_assess, mini_batch_size)
-
-# print ("shape of the 1st mini_batch_X: " + str(mini_batches[0][0].shape))
-# print ("shape of the 2nd mini_batch_X: " + str(mini_batches[1][0].shape))
-# print ("shape of the 3rd mini_batch_X: " + str(mini_batches[2][0].shape))
-# print ("shape of the 1st mini_batch_Y: " + str(mini_batches[0][1].shape))
-# print ("shape of the 2nd mini_batch_Y: " + str(mini_batches[1][1].shape)) 
-# print ("shape of the 3rd mini_batch_Y: " + str(mini_batches[2][1].shape))
-# print ("mini batch sanity check: " + str(mini_batches[0][0][0][0:3]))
+# def initialize_adam(params):
+#     L = len(params) // 2
+    
+#     np.random.seed(3)
+#     V = {} # store velocity of momentum
+#     S = {} # store volo
+#     for l in range(1, self.__L):
+#         # Init parameter for momentum
+#         V['dW'+str(l)] = np.rand
+#         # Init parameter for RMS prop
+#         # Assert the shape
+#         assert(self.__params['W' + str(l)].shape == (self.__layer_dims[l], self.__layer_dims[l-1]))
+#         assert(self.__params['b' + str(l)].shape == (self.__layer_dims[l], 1))
