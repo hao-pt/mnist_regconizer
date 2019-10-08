@@ -20,7 +20,7 @@ Sử dụng numpy làm thư viện chính.
 
 Phương thức khởi tạo là He initialization để tránh hiện tượng vanishing/exploding gradient và hoạt động hiệu quả với hàm Relu.
 
-Trong đó, thuật toán optimizer được sử dụng là minibatch gradient descent. Theo đó, regularization sử dụng là weight decay (L2 norm). Hàm lỗi sử dùng là softmax cross-entropy. 
+Trong đó, thuật toán optimizer được sử dụng là minibatch gradient descent. Theo đó, regularization sử dụng là weight decay (L2 norm) để tránh overfitting. Hàm lỗi sử dùng là softmax cross-entropy. 
 
 Activation function sử dụng là Relu ở hiden layers và Softmax được sử dụng ở output layer.
 
@@ -45,5 +45,5 @@ python 1612174.py -h
 Các tham số quan trọng cần cung cấp
 
 ```
-python 1612174.py -train "Your train file" -test digit-recognizer/test.csv -nh1 1000 -epoches 50 -batch 64 -lr 0.1 -decay 5e-4
+python 1612174.py -train "Your train file" -test digit-recognizer/test.csv -nh1 1000 -epoches 50 -batch 64 -lr 0.5 -decay 5e-4
 ```
