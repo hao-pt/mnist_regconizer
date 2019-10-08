@@ -48,6 +48,6 @@ Các tham số quan trọng cần cung cấp
 python 1612174.py -train "Your train file" -test digit-recognizer/test.csv -nh1 1000 -epoches 50 -batch 64 -lr 0.5 -decay 5e-4
 ```
 
-Parameters được lưu xuống dưới tên sau: ddmmYY-HMS
-```sa
-```
+Parameters được lưu xuống dưới tên sau: ddmmYY-HMS (dd/mm/Y H:M:S)
+
+Ví dụ: 08102019-165350
