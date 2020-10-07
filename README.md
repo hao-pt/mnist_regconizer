@@ -7,47 +7,47 @@ pip install -r requirements.txt
 ```
 
 ## Model architecture
-Mạng neural network gồm 1 hoặc nhiều lớp ẩn nhưng ở đây chỉ giới hạn khảo sát 1 hoặc 2 lớp ẩn.
+Neural network includes 1 or multiple hidden layers but here I just experiments with 1 or 2 hidden layers.
 
-
-## Chi tiết cài đặt
+## Implementation specifications:
 ```
-Input: (784, m) - m là số lượng mẫu
+Input: (784, m) - m is number of examples
 
 Output: (1, m)
 ```
-Sử dụng numpy làm thư viện chính.
+> Main library is numpy.
 
-Phương thức khởi tạo là He initialization để tránh hiện tượng vanishing/exploding gradient và hoạt động hiệu quả với hàm Relu.
+- Weight initialization is `He initialization` to avoid vanishing/exploding gradient at starting epochs and work well with Relu activation function.
+- Optimizer: minibatch gradient descent.
+- Regularization: weight decay (L2 norm) to avoid overfitting.
+- Loss function: softmax cross-entropy for multivariate problem.
 
-Trong đó, thuật toán optimizer được sử dụng là minibatch gradient descent. Theo đó, regularization sử dụng là weight decay (L2 norm) để tránh overfitting. Hàm lỗi sử dùng là softmax cross-entropy. 
-
-Activation function sử dụng là Relu ở hiden layers và Softmax được sử dụng ở output layer.
+Note: Activation function Relu is used at hiden layers while Softmax is put at output layer.
 
 ## Tuning parameters
 
-Ở đây, ta có các siêu tham số cần điều chỉnh như:
-- nx: số chiều của X
-- nh1: số units của hidden layer 1
-- nh2: số units của hidden layer 2
-- epoches: số epoch để train model
-- batch size: mini batch size
-- learning rate: tốc độ học
-- weight decay: L2 regularization để tránh overfitting
+Some hyper-parameters to tune:
+- nx: dimension of X
+- nh1: number of units in hidden layer 1 số units của hidden layer 1
+- nh2: number of units in hidden layer 2 số units của hidden layer 2
+- epoches: number of epochs to train model số epoch để train model
+- batch size
+- learning rate
+- weight decay: L2 regularization
 
 ## Run commandline
-Để nhận sự trợ giúp, gõ lệnh:
+Get help:
 
 ```
 python 1612174.py -h
 ```
  
-Các tham số quan trọng cần cung cấp
+Train model:
 
 ```
 python 1612174.py -train "Your train file" -test digit-recognizer/test.csv -nh1 1000 -epoches 50 -batch 64 -lr 0.5 -decay 5e-4
 ```
 
-Parameters được lưu xuống dưới tên sau: ddmmYY-HMS (dd/mm/Y H:M:S)
+Parameters are saved in filename: ddmmYY-HMS (dd/mm/Y H:M:S)
 
-Ví dụ: 08102019-165350
+Ex: 08102019-165350
