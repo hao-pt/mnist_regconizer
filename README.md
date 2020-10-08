@@ -51,3 +51,19 @@ python 1612174.py -train "Your train file" -test digit-recognizer/test.csv -nh1 
 Parameters are saved in filename: ddmmYY-HMS (dd/mm/Y H:M:S)
 
 Ex: 08102019-165350
+
+## Submission results on Kaggle:
+|Model|Hyperparams|Train acc|Val acc|Test acc|
+|---|---|---|---|---|
+|1|nh1 = 1000, epoches = 50, learning_rate = 0.5, weight_decay = 5e-4, batch_size = 64|1.0|0.9797|0.9796|
+|2|nh1 = 1000, epoches = 50, learning_rate = 0.75, weight_decay = 5e-4, batch_size = 64|1.0|0.9802|0.9789|
+|3|nh1 = 128, nh2 = 64, epoches = 70, learning_rate = 0.5, weight_decay = 5e-4, batch_size = 64|1.0|0.9759|-|
+
+## Reference:
+[1] Dataset: https://www.kaggle.com/c/digit-recognizer/overview
+
+[2] Softmax: https://machinelearningcoban.com/2017/02/17/softmax/#-softmax-regression-cho-mnist
+
+[3] Neural Network tutorial: https://zhenye-na.github.io/2018/09/09/build-neural-network-with-mnist-from-scratch.html
+
+
